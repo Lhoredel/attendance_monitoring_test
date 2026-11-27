@@ -6,35 +6,31 @@ RUN apt-get update && apt-get install -y \
     && a2enmod rewrite
 
 COPY --from=composer:2 /usr/bin/composer /usr/bin/composer
-
 WORKDIR /var/www/html
-
-COPY composer.json composer.lock package.json package-lock.json* ./
-RUN composer install --no-dev --no-interaction --prefer-dist --optimize-autoloader
 
 FROM node:22 AS assets
 WORKDIR /app
-COPY package.json package-lock.json* vite.config.js ./
-RUN npm install
-COPY resources ./resources
+COPY package.json ./
+COPY vite.config.js ./
 COPY public ./public
-RUN npm run build
+COPY resources ./resources
+RUN npm install && npm run build
 
 FROM php AS app
 WORKDIR /var/www/html
 
 COPY . .
 COPY --from=assets /app/public/build ./public/build
-RUN mkdir -p database storage bootstrap/cache \
+
+RUN mkdir -p database storage/framework/cache storage/framework/sessions \
+    storage/framework/views storage/logs bootstrap/cache \
     && touch database/database.sqlite \
     && composer install --no-dev --no-interaction --prefer-dist --optimize-autoloader \
-    && php artisan config:clear \
-    && php artisan route:clear \
-    && php artisan view:clear \
     && chown -R www-data:www-data storage bootstrap/cache database
 
 RUN sed -i 's|DocumentRoot /var/www/html|DocumentRoot /var/www/html/public|g' \
     /etc/apache2/sites-available/000-default.conf
 
 EXPOSE 80
-CMD ["apache2-foreground"]
+
+CMD ["sh", "-c", "test -f .env || cp .env.example .env; grep -q '^APP_KEY=$' .env && php artisan key:generate --force; php artisan migrate --force; apache2-foreground"]
