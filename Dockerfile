@@ -22,14 +22,17 @@ WORKDIR /var/www/html
 COPY . .
 COPY --from=assets /app/public/build ./public/build
 
-RUN mkdir -p database storage/framework/cache storage/framework/sessions \
-    storage/framework/views storage/logs bootstrap/cache \
-    && touch database/database.sqlite \
-    && composer install --no-dev --no-interaction --prefer-dist --optimize-autoloader \
-    && chown -R www-data:www-data storage bootstrap/cache database
 
-RUN sed -i 's|DocumentRoot /var/www/html|DocumentRoot /var/www/html/public|g' \
-    /etc/apache2/sites-available/000-default.conf
+# Fix Laravel storage and cache permissions
+RUN mkdir -p storage/framework/cache \
+    storage/framework/sessions \
+    storage/framework/views \
+    storage/logs \
+    bootstrap/cache
+
+RUN chown -R www-data:www-data storage bootstrap/cache
+
+RUN chmod -R 775 storage bootstrap/cache
 
 EXPOSE 80
 
